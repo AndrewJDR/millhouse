@@ -61,6 +61,7 @@
 #  zpool iostat tank 60 | sh sasidle --timeout 15 --devices "tank:/dev/da[1-2] music:/dev/da[3-4]" --pool tank,music
 #  zpool iostat tank 60 | sh sasidle --timeout 15 --sync
 #  zpool iostat tank 60 | sh sasidle --timeout 15 --test --verbose
+#  zpool iostat 60 | sh millhouse.sh -v -t 1 -d da0,da1,da2,da3,da4,da5,da6,da7
 #
  
 POOL=`zpool list -H -o name | tr -s '\n' ',' | sed 's/,$//g'`
