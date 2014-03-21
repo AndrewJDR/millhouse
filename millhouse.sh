@@ -219,9 +219,18 @@ STOPPED=
 # Main infinite loop...
 while [ true ]; do
     read POOL_NAME POOL_USED POOL_AVAIL POOL_OP_READ POOL_OP_WRITE POOL_BW_READ POOL_BW_WRITE
+
+    SMART_IN_PROGRESS=
+    for DISK in ${DEVICES}; do
+        smartctl -n standby -a /dev/$DISK | grep -q "Self-test routine in progress"
+        if [ $? -eq 0 ]; then
+            SMART_IN_PROGRESS=Y
+            [ "${INFO}" ] && _log "** SMART test in progress on \"${DISK}\"! **"
+        fi
+    done
  
 # If no activity, decrement count, else reset it
-    if [ ${POOL_OP_READ-1} = 0 -a ${POOL_OP_WRITE-1} = 0 -a \
+    if [ ! "${SMART_IN_PROGRESS}" -a ${POOL_OP_READ-1} = 0 -a ${POOL_OP_WRITE-1} = 0 -a \
         ${POOL_BW_READ-1} = 0 -a ${POOL_BW_WRITE-1} = 0 ]; then
         [ ! ${STOPPED} ] && let COUNT=COUNT-1 >/dev/null
     else
@@ -238,21 +247,21 @@ while [ true ]; do
         ${COUNT} ${POOL_NAME} ${POOL_USED} ${POOL_AVAIL} \
         ${POOL_OP_READ} ${POOL_OP_WRITE} ${POOL_BW_READ} ${POOL_BW_WRITE})"
  
-# If count reaches zero, stop devices
+    # If count reaches zero, stop devices
     if [ ${COUNT} -le 0 -a ! "${STOPPED}" ]; then
-        [ "${INFO}" ] && _log "** Stopping devices in pool \"${POOL_NAME}\" **"
+	[ "${INFO}" ] && _log "** Stopping devices in pool \"${POOL_NAME}\" **"
  
-        for DISK in ${DEVICES}; do
-            if [ "${DOSTOP}" ]; then
-                [ "${INFO}" ] && _log "camcontrol stop ${DISK}"
-                [  "${ASYNC}" ] && camcontrol stop ${DISK} &
-                [ ! "${ASYNC}" ] && camcontrol stop ${DISK}
-            else
-                [ "${INFO}" ] && _log "#camcontrol stop ${DISK}"
-            fi
-        done
+	for DISK in ${DEVICES}; do
+	    if [ "${DOSTOP}" ]; then
+		[ "${INFO}" ] && _log "camcontrol stop ${DISK}"
+		[  "${ASYNC}" ] && camcontrol stop ${DISK} &
+		[ ! "${ASYNC}" ] && camcontrol stop ${DISK}
+	    else
+		[ "${INFO}" ] && _log "#camcontrol stop ${DISK}"
+	    fi
+	done
  
-        STOPPED=Y
+	STOPPED=Y
     fi
 done
  
