@@ -222,7 +222,7 @@ while [ true ]; do
 
     SMART_IN_PROGRESS=
     for DISK in ${DEVICES}; do
-        smartctl -n standby -a /dev/$DISK | grep -q "Self-test routine in progress"
+        smartctl -n standby -l xselftest,selftest /dev/$DISK | grep -q "Self-test routine in progress"
         if [ $? -eq 0 ]; then
             SMART_IN_PROGRESS=Y
             [ "${INFO}" ] && _log "** SMART test in progress on \"${DISK}\"! **"
