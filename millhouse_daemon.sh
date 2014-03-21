@@ -1,5 +1,11 @@
 #!/bin/sh
 
+if [ -f /var/run/sasidled.pid ]; then
+	echo "millhouse is already running, exiting" | logger -i -t sasidle
+	exit
+fi
+echo $$ >>/var/run/sasidled.pid
+
 ( while [ 1 -eq 1 ]; do
         sleep 60
         zpool iostat >/dev/null 2>/dev/null
