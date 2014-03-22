@@ -4,6 +4,7 @@
 #VERSION:  0.3.3
 #MODIFIED: 22 Oct 2013
 #AUTHOR:  Milhouse
+#SMART Mods by Andrew
 #
 #DESCRIPTION: Created on FreeNAS 8.0.1-BETA4 with LSI 9211-8i HBA
 #            Tested on FreeNAS 8.0.2-RELEASE with LSI 9211-8i HBA
@@ -222,15 +223,21 @@ while [ true ]; do
     read POOL_NAME POOL_USED POOL_AVAIL POOL_OP_READ POOL_OP_WRITE POOL_BW_READ POOL_BW_WRITE
 
     SMART_IN_PROGRESS=
+    NON_STANDBY_DEVICES=
     for DISK in ${DEVICES}; do
-        smartctl -n standby -l xselftest,selftest /dev/$DISK | grep -q "Self-test routine in progress"
+        SMARTOUT=$(/usr/local/sbin/smartctl -n standby -l xselftest,selftest /dev/$DISK)
+        echo $SMARTOUT | grep -q "Self-test routine in progress"
         if [ $? -eq 0 ]; then
             SMART_IN_PROGRESS=Y
             [ "${INFO}" ] && _log "** SMART test in progress on \"${DISK}\"! **"
         fi
+		echo $SMARTOUT | grep -q "Device is in STANDBY mode"
+        if [ $? -ne 0 ]; then
+            NON_STANDBY_DEVICES="${NON_STANDBY_DEVICES} ${DISK}"
+        fi
     done
  
-# If no activity, decrement count, else reset it
+    # If no activity, decrement count, else reset it
     if [ ! "${SMART_IN_PROGRESS}" -a ${POOL_OP_READ-1} = 0 -a ${POOL_OP_WRITE-1} = 0 -a \
         ${POOL_BW_READ-1} = 0 -a ${POOL_BW_WRITE-1} = 0 ]; then
         [ ! ${STOPPED} ] && let COUNT=COUNT-1 >/dev/null
@@ -238,12 +245,18 @@ while [ true ]; do
         if [ "${STOPPED}" -a "${LOGSTART}" ]; then
             [ "${INFO}" ] && _log "** Restarting devices in pool \"${POOL_NAME}\" due to activity **"
         fi
- 
+        COUNT=${TIMEOUT}
+        STOPPED=
+    fi
+
+    # Additionally, if smart reports that a drive has awoken, reset
+    if [ "${STOPPED}" -a "${NON_STANDBY_DEVICES}" ]; then
+        [ "${INFO}" ] && _log "** Devices:${NON_STANDBY_DEVICES} have awoken from standby! restarting idle timer **"
         COUNT=${TIMEOUT}
         STOPPED=
     fi
  
-# Optional diagnostic output...
+    # Optional diagnostic output...
     [ "${DEBUG}" ] && _log "$(printf "%.3d: %-10s  %5s  %5s  %5s  %5s  %5s  %5s\n" \
         ${COUNT} ${POOL_NAME} ${POOL_USED} ${POOL_AVAIL} \
         ${POOL_OP_READ} ${POOL_OP_WRITE} ${POOL_BW_READ} ${POOL_BW_WRITE})"
@@ -254,11 +267,11 @@ while [ true ]; do
  
 	for DISK in ${DEVICES}; do
 	    if [ "${DOSTOP}" ]; then
-		[ "${INFO}" ] && _log "camcontrol stop ${DISK}"
-		[  "${ASYNC}" ] && camcontrol stop ${DISK} &
-		[ ! "${ASYNC}" ] && camcontrol stop ${DISK}
+		[ "${INFO}" ] && _log "smartctl -q errorsonly -n standby -s standby,now /dev/${DISK}"
+		[  "${ASYNC}" ] && /usr/local/sbin/smartctl -q errorsonly -n standby -s standby,now /dev/${DISK} &
+		[ ! "${ASYNC}" ] && /usr/local/sbin/smartctl -q errorsonly -n standby -s standby,now /dev/${DISK}
 	    else
-		[ "${INFO}" ] && _log "#camcontrol stop ${DISK}"
+		[ "${INFO}" ] && _log "#smartctl -q errorsonly -n standby -s standby,now /dev/${DISK}"
 	    fi
 	done
  
